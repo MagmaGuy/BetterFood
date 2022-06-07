@@ -1,0 +1,76 @@
+plugins {
+    id 'java-library'
+    id 'idea'
+    id 'maven-publish'
+    id "com.github.johnrengelman.shadow" version "7.0.0"
+}
+
+//Fixes issues related to special characters being used
+compileJava.options.encoding = "UTF-8"
+compileTestJava.options.encoding = "UTF-8"
+
+group = "com.magmaguy"
+version = "1.2.0"
+description = "BetterFood"
+
+repositories {
+    mavenLocal()
+    maven {
+        url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/'
+
+        // As of Gradle 5.1, you can limit this to only those
+        // dependencies you expect from it
+        content {
+            includeGroup 'org.bukkit'
+            includeGroup 'org.spigotmc'
+        }
+    }
+
+    //Bstats API
+    maven { url = 'https://repo.codemc.org/repository/maven-public' }
+
+    mavenCentral()
+    jcenter()
+    mavenLocal()
+}
+
+dependencies {
+    //Spigot API
+    compileOnly "org.spigotmc:spigot-api:1.18-R0.1-SNAPSHOT"
+    //BStats API
+    implementation group: 'org.bstats', name: 'bstats-bukkit', version: '2.2.1'
+}
+
+artifacts { // task 'build' runs generates uberjar
+    archives shadowJar
+}
+
+jar {
+    archiveClassifier.set('min') // we want the Uberjar to be distributed, this is the minified version
+}
+
+String packagePath = 'com.magmaguy.shaded'
+
+// Relocating a Package
+shadowJar {
+    dependencies {
+        relocate('org.bstats', packagePath + '.bstats')
+    }
+    archiveClassifier.set(null)
+    archiveFileName.set(project.name + ".jar")
+    destinationDirectory.set(new File("output"))
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+ext {
+    resourceTokens = [
+            'Version': version
+    ]
+}
+
+processResources {
+    filter org.apache.tools.ant.filters.ReplaceTokens, tokens: resourceTokens
+}
