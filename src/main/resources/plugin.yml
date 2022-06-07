@@ -1,8 +1,17 @@
 name: BetterFood
-version: 1.2.1
-author: MagmaGuy
+version: 1.3.0
+authors:
+  - MagmaGuy
+  - borkmaster12
 main: com.magmaguy.betterfood.BetterFood
-api-version: 1.14
+api-version: 1.18
 permissions:
   betterfood.user:
     description: Makes players automatically eat crafted / cooked food that is in their inventories when sufficiently hungry
+commands:
+  betterfood:
+    aliases: bf
+    description: Use to set betterfood plugin options
+    usage: /<command>
+    permission: betterfood.user
+    permission-message: You do not have permission to use this command

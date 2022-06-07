@@ -1,3 +1,5 @@
+import org.apache.tools.ant.filters.ReplaceTokens
+
 plugins {
     id 'java-library'
     id 'idea'
@@ -30,11 +32,16 @@ repositories {
     maven { url = 'https://repo.codemc.org/repository/maven-public' }
 
     mavenCentral()
-    jcenter()
     mavenLocal()
 }
 
 dependencies {
+    implementation 'org.projectlombok:lombok:1.18.24'
+    implementation 'org.jetbrains:annotations:23.0.0'
+    implementation 'org.jetbrains:annotations:23.0.0'
+    compileOnly 'org.projectlombok:lombok:1.18.24'
+    annotationProcessor 'org.projectlombok:lombok:1.18.24'
+
     //Spigot API
     compileOnly "org.spigotmc:spigot-api:1.18-R0.1-SNAPSHOT"
     //BStats API
@@ -72,5 +79,5 @@ ext {
 }
 
 processResources {
-    filter org.apache.tools.ant.filters.ReplaceTokens, tokens: resourceTokens
+    filter ReplaceTokens, tokens: resourceTokens
 }
