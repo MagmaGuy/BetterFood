@@ -3,7 +3,7 @@ package com.magmaguy.betterfood;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.apache.commons.lang.WordUtils;
-import org.bstats.Metrics;
+import org.bstats.bukkit.Metrics;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -25,7 +25,7 @@ public class BetterFood extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        Metrics metrics = new Metrics(this);
+        new Metrics(this, 4557);
         this.getServer().getPluginManager().registerEvents(this, this);
     }
 
