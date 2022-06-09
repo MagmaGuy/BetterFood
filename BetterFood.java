@@ -131,9 +131,9 @@ public class BetterFood extends JavaPlugin implements Listener {
                 for (ItemStack itemStack : playerInventory)
                     if (itemStack != null && itemStack.getType().equals(material))
                         if (!itemStack.getItemMeta().hasLore() && !itemStack.getItemMeta().hasDisplayName()) {
+                            playerMessage(player, WordUtils.capitalizeFully(itemStack.getType().name().toLowerCase().replace("_", " ")));
                             itemStack.setAmount(itemStack.getAmount() - 1);
                             player.setFoodLevel(playerFoodLevel + foodLevelThreshold);
-                            playerMessage(player, WordUtils.capitalizeFully(itemStack.getType().name().toLowerCase().replace("_", " ")));
                             return true;
                         }
 
