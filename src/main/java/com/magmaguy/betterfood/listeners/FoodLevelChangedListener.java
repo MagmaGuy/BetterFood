@@ -86,6 +86,8 @@ public class FoodLevelChangedListener implements Listener {
             inventoryMap.get(itemMaterial).add(item);
         }
 
+        if (HUNGER_TO_FOODBYHUNGER_OFFSET.get(newFoodLevel) == null) return;
+
         //Determines which index of FOOD_BY_HUNGER_RESTORED to start iterating from based on hunger level
         int indexOffset = HUNGER_TO_FOODBYHUNGER_OFFSET.get(newFoodLevel);
 
