@@ -1,6 +1,9 @@
 package com.magmaguy.betterfood.commands;
 
 import com.magmaguy.betterfood.BetterFood;
+import com.magmaguy.magmacore.nightbreak.NightbreakCatalogMenu;
+import com.magmaguy.magmacore.nightbreak.NightbreakSetupControls;
+import com.magmaguy.magmacore.nightbreak.NightbreakPluginUpdater;
 import org.bukkit.NamespacedKey;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -21,19 +24,48 @@ public class BetterFoodCommand implements TabExecutor {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
-
-        if (sender instanceof Player player) {
-
-            if (args.length == 0) {
-                toggleBetterFoodEnabled(player);
+        if (args.length == 0) {
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("[BF] Use /betterfood downloadpluginupdate to check for plugin updates.");
+                return true;
             }
+            if (!sender.hasPermission("betterfood.user")) {
+                sender.sendMessage("[BF] You do not have permission to change BetterFood settings.");
+                return true;
+            }
+            toggleBetterFoodEnabled(player);
+            return true;
+        }
 
-            if (args.length == 1 ) {
-                switch (args[0]) {
-                    case "toggleEating" -> toggleBetterFoodEnabled(player);
-                    case "toggleMessage" -> toggleBetterFoodMessage(player);
-                    default -> player.sendMessage("[EM] Invalid command");
+        if (args.length == 1) {
+            switch (args[0].toLowerCase()) {
+                case "downloadall", "downloadpluginupdate" -> downloadPluginUpdate(sender);
+                case "downloadallcontent" -> noContentPacks(sender);
+                case "setup" -> openSetup(sender);
+                case "recommendedplugins" -> recommendedPlugins(sender);
+                case "toggleeating" -> {
+                    if (!(sender instanceof Player player)) {
+                        sender.sendMessage("[BF] BetterFood settings can only be changed in-game.");
+                        return true;
+                    }
+                    if (!sender.hasPermission("betterfood.user")) {
+                        sender.sendMessage("[BF] You do not have permission to change BetterFood settings.");
+                        return true;
+                    }
+                    toggleBetterFoodEnabled(player);
                 }
+                case "togglemessage" -> {
+                    if (!(sender instanceof Player player)) {
+                        sender.sendMessage("[BF] BetterFood settings can only be changed in-game.");
+                        return true;
+                    }
+                    if (!sender.hasPermission("betterfood.user")) {
+                        sender.sendMessage("[BF] You do not have permission to change BetterFood settings.");
+                        return true;
+                    }
+                    toggleBetterFoodMessage(player);
+                }
+                default -> sender.sendMessage("[BF] Invalid command. Use /betterfood setup, /betterfood recommendedplugins, /betterfood toggleEating, /betterfood toggleMessage, or /betterfood downloadpluginupdate.");
             }
         }
 
@@ -46,11 +78,16 @@ public class BetterFoodCommand implements TabExecutor {
         if (args.length == 1) {
             return List.of(
                     "toggleEating",
-                    "toggleMessage"
+                    "toggleMessage",
+                    "downloadpluginupdate",
+                    "downloadall",
+                    "downloadallcontent",
+                    "setup",
+                    "recommendedplugins"
             );
         }
 
-        return null;
+        return List.of();
     }
 
     private void toggleBetterFoodEnabled(Player player) {
@@ -80,5 +117,45 @@ public class BetterFoodCommand implements TabExecutor {
             playerData.set(betterFoodShowMessageKey, PersistentDataType.BYTE, (byte)0);
             player.sendMessage("[BF] No longer showing food consumption notifications");
         }
+    }
+
+    private void downloadPluginUpdate(CommandSender sender) {
+        if (!sender.hasPermission("betterfood.admin")) {
+            sender.sendMessage("[BF] You do not have permission to update the BetterFood plugin.");
+            return;
+        }
+        NightbreakPluginUpdater.downloadPluginUpdateAsync(plugin, BetterFood.NIGHTBREAK_PLUGIN_SPEC, sender, null);
+    }
+
+    private void noContentPacks(CommandSender sender) {
+        if (!sender.hasPermission("betterfood.admin")) {
+            sender.sendMessage("[BF] You do not have permission to update BetterFood.");
+            return;
+        }
+        sender.sendMessage("[BF] BetterFood does not have content packs. Use /betterfood setup for plugin updates and settings.");
+    }
+
+    private void openSetup(CommandSender sender) {
+        if (!sender.hasPermission("betterfood.admin")) {
+            sender.sendMessage("[BF] You do not have permission to open BetterFood setup.");
+            return;
+        }
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage("[BF] BetterFood setup can only be opened in-game.");
+            return;
+        }
+        NightbreakSetupControls.openPluginSetupShell(plugin, player, BetterFood.NIGHTBREAK_PLUGIN_SPEC);
+    }
+
+    private void recommendedPlugins(CommandSender sender) {
+        if (!sender.hasPermission("betterfood.admin")) {
+            sender.sendMessage("[BF] You do not have permission to view BetterFood recommendations.");
+            return;
+        }
+        if (sender instanceof Player player) {
+            NightbreakCatalogMenu.openRecommendations(plugin, player, BetterFood.NIGHTBREAK_PLUGIN_SPEC);
+            return;
+        }
+        NightbreakCatalogMenu.sendRecommendations(sender, BetterFood.NIGHTBREAK_PLUGIN_SPEC);
     }
 }
