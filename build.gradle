@@ -12,7 +12,7 @@ compileJava.options.encoding = "UTF-8"
 compileTestJava.options.encoding = "UTF-8"
 
 group = "com.magmaguy"
-version = "1.4.2"
+version = "1.4.3"
 description = "BetterFood"
 
 repositories {
@@ -30,6 +30,8 @@ repositories {
 
     //Bstats API
     maven { url = 'https://repo.codemc.org/repository/maven-public' }
+    //Paper API for MockBukkit tests
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
 
     //MagmaGuy's Repository
     maven { url = 'https://repo.magmaguy.com/releases' }
@@ -52,6 +54,11 @@ dependencies {
     implementation (group: 'com.magmaguy', name: 'MagmaCore', version: '2.2.0-SNAPSHOT'){
         changing = true
     }
+
+    testImplementation "io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT"
+    testImplementation "org.mockbukkit.mockbukkit:mockbukkit-v1.21:4.110.0"
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.0.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.0.3'
 }
 
 configurations.all {
@@ -74,6 +81,11 @@ shadowJar {
         relocate('org.bstats', packagePath + '.bstats')
     }
     relocate 'com.magmaguy.easyminecraftgoals', 'com.magmaguy.betterfood.easyminecraftgoals'
+    // Relocate the shaded MagmaCore so its static singleton (and config-folder resolution via
+    // MagmaCore.getInstance().getRequestingPlugin()) is isolated per plugin. Without this, every
+    // plugin that ships MagmaCore unrelocated shares one instance/requestingPlugin, so their
+    // configs (e.g. setupDone) collide in a single data folder and never persist per-plugin.
+    relocate 'com.magmaguy.magmacore', 'com.magmaguy.betterfood.magmacore'
     archiveClassifier.set(null)
     archiveFileName.set(project.name + ".jar")
 }
@@ -94,6 +106,10 @@ if (mcDistDir) {
 
 tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
+}
+
+test {
+    useJUnitPlatform()
 }
 
 java {
