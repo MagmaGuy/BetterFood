@@ -13,27 +13,39 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
-import org.jetbrains.annotations.NotNull;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class FoodLevelChangedListener implements Listener {
 
     private static final int MAX_HUNGER = 20;
     private static final Food[] FOODS_ORDERED_BY_HUNGER_RESTORED = Food.getFood().stream()
             .sorted(Comparator.comparing(Food::getHungerRestored)
-                    .thenComparing(Food::getSaturationRestored).reversed())
+                    .thenComparing(Food::getSaturationRestored)
+                    .reversed()
+                    .thenComparing(food -> food.getFoodMaterial().name()))
             .toArray(Food[]::new);
 
-    //Stores where food search should start iterating the FOOD_BY_HUNGER array for each possible hunger level
-    private static final Map<Integer, Integer> HUNGER_TO_FOODBYHUNGER_OFFSET = new HashMap<>();
+    //Stores where food search should start iterating the FOODS_ORDERED_BY_HUNGER_RESTORED array for each possible hunger level
+    private static final int[] HUNGER_TO_FOOD_INDEX_OFFSET = new int[MAX_HUNGER];
+
+    //Maps each food Material to its index in FOODS_ORDERED_BY_HUNGER_RESTORED
+    private static final Map<Material, Integer> MATERIAL_TO_FOOD_INDEX = new EnumMap<>(Material.class);
 
     static {
 
-        //Populates the Hunger -> HUNGER_TO_FOODBYHUNGER_OFFSET map
+        //Populates the food Material -> FOODS_ORDERED_BY_HUNGER_RESTORED index map
+        for (int i = 0; i < FOODS_ORDERED_BY_HUNGER_RESTORED.length; i++)
+            MATERIAL_TO_FOOD_INDEX.put(FOODS_ORDERED_BY_HUNGER_RESTORED[i].getFoodMaterial(), i);
+
+        //Populates the hunger level -> FOODS_ORDERED_BY_HUNGER_RESTORED start-index array
         int currentHungerStartIndex = 0;
         int nextHungerStartIndex = getNextHungerStartIndex(currentHungerStartIndex);
         int nextHungerRestoreAmount = FOODS_ORDERED_BY_HUNGER_RESTORED[nextHungerStartIndex].getHungerRestored();
@@ -44,7 +56,7 @@ public class FoodLevelChangedListener implements Listener {
                 nextHungerStartIndex = getNextHungerStartIndex(currentHungerStartIndex);
                 nextHungerRestoreAmount = FOODS_ORDERED_BY_HUNGER_RESTORED[nextHungerStartIndex].getHungerRestored();
             }
-            HUNGER_TO_FOODBYHUNGER_OFFSET.put(foodLevel, currentHungerStartIndex);
+            HUNGER_TO_FOOD_INDEX_OFFSET[foodLevel] = currentHungerStartIndex;
         }
     }
 
@@ -55,11 +67,10 @@ public class FoodLevelChangedListener implements Listener {
         this.keyBetterFoodHideMessage = plugin.getKeyHideMessage();
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onFoodLevelChanged(FoodLevelChangeEvent event) {
 
-        Player player = (Player) event.getEntity();
-        if (!player.hasPermission("betterfood.user"))
+        if (!(event.getEntity() instanceof Player player))
             return;
 
         //Only acts on events where hunger is being lowered
@@ -68,71 +79,67 @@ public class FoodLevelChangedListener implements Listener {
         if (newFoodLevel >= playerFoodLevel)
             return;
 
+        if (!player.hasPermission("betterfood.user"))
+            return;
+
         PersistentDataContainer playerData = player.getPersistentDataContainer();
         if (playerData.has(keyBetterFoodDisabled, PersistentDataType.BYTE))
             return;
 
+        //Determines which index of FOODS_ORDERED_BY_HUNGER_RESTORED to start iterating from based on hunger level
+        if (newFoodLevel < 0 || newFoodLevel >= MAX_HUNGER) return;
+        int indexOffset = HUNGER_TO_FOOD_INDEX_OFFSET[newFoodLevel];
+
         PlayerInventory playerInventory = player.getInventory();
 
-        //Iterates the Player inventory once creating a map of ItemStacks as follows:
+        //Iterates the Player inventory once creating a map as follows:
         //Key: ItemStack Material
-        //Value: Set of all ItemStacks in the inventory that match the Material
+        //Value: slot + ItemStack pairs for all matching slots in ascending inventory order
         //Used to restrict further inventory iterations to only the ItemStacks relevant to the searched Food
-        Map<@NotNull Material, @NotNull Set<ItemStack>> inventoryMap = new HashMap<>();
-        for (ItemStack item : playerInventory) {
-            if (item == null) continue;
+        Map<Material, List<InventoryFoodCandidate>> inventoryMap = new HashMap<>();
+        for (int slot = 0; slot < playerInventory.getSize(); slot++) {
+            ItemStack item = playerInventory.getItem(slot);
+            if (item == null)
+                continue;
             Material itemMaterial = item.getType();
-            inventoryMap.putIfAbsent(itemMaterial, new HashSet<>());
-            inventoryMap.get(itemMaterial).add(item);
+            //Foods ordered before indexOffset are never searched below, so skip bucketing them
+            Integer foodIndex = MATERIAL_TO_FOOD_INDEX.get(itemMaterial);
+            if (foodIndex == null || foodIndex < indexOffset)
+                continue;
+            inventoryMap.computeIfAbsent(itemMaterial, ignored -> new ArrayList<>())
+                    .add(new InventoryFoodCandidate(slot, item));
         }
-
-        if (HUNGER_TO_FOODBYHUNGER_OFFSET.get(newFoodLevel) == null) return;
-
-        //Determines which index of FOOD_BY_HUNGER_RESTORED to start iterating from based on hunger level
-        int indexOffset = HUNGER_TO_FOODBYHUNGER_OFFSET.get(newFoodLevel);
 
         //The logic below searches for the first 'valid' food item in the Player inventory
         //Will iterate starting from the position of the first food in the array that would perfectly fill the hunger bar
         //Will continue iterating along the array in the direction of foods that are less nourishing until Food is found
-        ItemStack validFoodItem = null;
-        for (int i = indexOffset; i < FOODS_ORDERED_BY_HUNGER_RESTORED.length - 1; i++) {
+        for (int i = indexOffset; i < FOODS_ORDERED_BY_HUNGER_RESTORED.length; i++) {
 
             Food food = FOODS_ORDERED_BY_HUNGER_RESTORED[i];
             Material foodMaterial = food.getFoodMaterial();
 
-            if (!inventoryMap.containsKey(foodMaterial))
+            List<InventoryFoodCandidate> inventoryFoodItems = inventoryMap.get(foodMaterial);
+            if (inventoryFoodItems == null)
                 continue;
 
-            Set<ItemStack> inventoryFoodItems = inventoryMap.get(foodMaterial);
-            for (ItemStack inventoryFoodItem : inventoryFoodItems) {
-
-                //Ensures the target ItemStack does not contain a customized item
-                ItemMeta playerFoodMeta = inventoryFoodItem.getItemMeta();
-                if (playerFoodMeta == null
-                        || playerFoodMeta.hasDisplayName()
-                        || playerFoodMeta.hasLore())
-                    continue;
-
-                validFoodItem = inventoryFoodItem;
-                break;
-            }
-
-            if (validFoodItem == null)
+            InventoryFoodCandidate validFood = inventoryFoodItems.stream()
+                    .filter(candidate -> isUnmodifiedVanillaItem(candidate.itemStack()))
+                    .findFirst()
+                    .orElse(null);
+            if (validFood == null)
                 continue;
 
             //Restricts max and min hunger/saturation values following MC logic
-            int newHungerLevel = Math.min(Math.max(newFoodLevel + food.getHungerRestored(), 0), 20);
+            int newHungerLevel = Math.min(newFoodLevel + food.getHungerRestored(), MAX_HUNGER);
             float newSaturationLevel = Math.max(player.getSaturation() + food.getSaturationRestored(), 0);
             newSaturationLevel = Math.min(newSaturationLevel, newHungerLevel);
 
             if (!playerData.has(keyBetterFoodHideMessage, PersistentDataType.BYTE))
                 player.spigot().sendMessage(
                         ChatMessageType.ACTION_BAR,
-                        TextComponent.fromLegacyText("You ate some " + validFoodItem.getType()));
+                        TextComponent.fromLegacyText("You ate some " + foodMaterial));
 
-            //Ensure all actions taken involving the ItemStack happen prior to decrement
-            //Otherwise could see issues related to ItemStack depletion
-            validFoodItem.setAmount(validFoodItem.getAmount() - 1);
+            consumeFood(player, playerInventory, validFood, food);
             event.setFoodLevel(newHungerLevel);
             player.setSaturation(newSaturationLevel);
 
@@ -140,15 +147,53 @@ public class FoodLevelChangedListener implements Listener {
         }
     }
 
+    /**
+     * Compares the complete Bukkit item representation with a pristine stack of
+     * the same material. Unlike a hand-maintained list of ItemMeta fields, this
+     * also rejects new or opaque data components that Bukkit includes in item
+     * similarity (including persistent custom data).
+     */
+    private static boolean isUnmodifiedVanillaItem(ItemStack itemStack) {
+        return new ItemStack(itemStack.getType()).isSimilar(itemStack);
+    }
+
+    private static void consumeFood(Player player,
+                                    PlayerInventory playerInventory,
+                                    InventoryFoodCandidate foodCandidate,
+                                    Food food) {
+        ItemStack foodItem = foodCandidate.itemStack();
+        int remainingFood = foodItem.getAmount() - 1;
+        Material remainder = food.getRemainderMaterial();
+        boolean returnsBowl = remainder != null;
+
+        if (remainingFood <= 0) {
+            playerInventory.setItem(
+                    foodCandidate.slot(),
+                    returnsBowl ? new ItemStack(remainder) : null
+            );
+            return;
+        }
+
+        foodItem.setAmount(remainingFood);
+        // Defensive write-back: getItem() returning a live mirror is a CraftBukkit implementation detail, not an API guarantee.
+        playerInventory.setItem(foodCandidate.slot(), foodItem);
+        if (!returnsBowl)
+            return;
+
+        Map<Integer, ItemStack> overflow = playerInventory.addItem(new ItemStack(remainder));
+        overflow.values().forEach(item ->
+                player.getWorld().dropItemNaturally(player.getLocation(), item));
+    }
+
     //Gets the index of the next Food in the target array with a different Hunger Restoration value
     private static int getNextHungerStartIndex(int currentIndex) {
 
-        if (currentIndex > FOODS_ORDERED_BY_HUNGER_RESTORED.length)
-            return -1;
+        if (currentIndex < 0 || currentIndex >= FOODS_ORDERED_BY_HUNGER_RESTORED.length)
+            throw new IllegalStateException("currentIndex out of bounds: " + currentIndex);
 
         int currentHungerRestored = FOODS_ORDERED_BY_HUNGER_RESTORED[currentIndex].getHungerRestored();
 
-        for (int i = currentIndex; i < FOODS_ORDERED_BY_HUNGER_RESTORED.length - 1; i++) {
+        for (int i = currentIndex + 1; i < FOODS_ORDERED_BY_HUNGER_RESTORED.length; i++) {
 
             int nextHungerRestoreAmount = FOODS_ORDERED_BY_HUNGER_RESTORED[i].getHungerRestored();
             if (nextHungerRestoreAmount == currentHungerRestored)
@@ -158,5 +203,8 @@ public class FoodLevelChangedListener implements Listener {
         }
 
         return currentIndex;
+    }
+
+    private record InventoryFoodCandidate(int slot, ItemStack itemStack) {
     }
 }

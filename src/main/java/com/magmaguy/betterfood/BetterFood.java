@@ -22,18 +22,16 @@ public class BetterFood extends JavaPlugin {
             "betterfood.admin",
             "betterfood.admin",
             "https://nightbreak.io/plugin/betterfood/",
-            "Reloaded BetterFood.",
+            "Reloaded BetterFood.", // Inert: only NightbreakPluginBootstrap sends this, and BetterFood does not use the bootstrap.
             false,
             false,
             false);
 
-    //Should probably have these keys in some sort of utility class
+    // PDC key literals "enabled"/"showmessage" are legacy and deliberately inverted relative to their meaning (presence = disabled / hide). Never change them: they are persisted on player data.
     @Getter
     private final NamespacedKey keyDisabled = new NamespacedKey(this, "enabled");
     @Getter
     private final NamespacedKey keyHideMessage = new NamespacedKey(this, "showmessage");
-    @Getter
-    private final NamespacedKey keyMode = new NamespacedKey(this, "mode");
 
     @Override
     public void onLoad() {
@@ -43,7 +41,6 @@ public class BetterFood extends JavaPlugin {
     @Override
     public void onEnable() {
         MagmaCore.onEnable(this);
-        NightbreakPluginUpdater.ensureAutoDownloadConfigDefault(this);
         new Metrics(this, 4557);
         Food.logCoverageAudit(getLogger());
         this.getServer().getPluginManager().registerEvents(new FoodLevelChangedListener(this), this);
@@ -53,8 +50,14 @@ public class BetterFood extends JavaPlugin {
             betterFoodCommand.setExecutor(command);
             betterFoodCommand.setTabCompleter(command);
         }
-        MagmaCore.checkVersionUpdate("", "https://nightbreak.io/plugin/betterfood/");
+        // Blank first arg means "no Spigot resource id" - this is a Nightbreak-only version check.
+        MagmaCore.checkVersionUpdate("", NIGHTBREAK_PLUGIN_SPEC.contentUrl());
         NightbreakPluginUpdater.autoDownloadPluginUpdateIfEnabled(this, NIGHTBREAK_PLUGIN_SPEC);
+    }
+
+    @Override
+    public void onDisable() {
+        MagmaCore.shutdown(this);
     }
 
 }

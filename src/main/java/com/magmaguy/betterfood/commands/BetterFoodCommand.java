@@ -13,7 +13,9 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class BetterFoodCommand implements TabExecutor {
     private final BetterFood plugin;
@@ -25,50 +27,31 @@ public class BetterFoodCommand implements TabExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, String[] args) {
         if (args.length == 0) {
-            if (!(sender instanceof Player player)) {
-                sender.sendMessage("[BF] Use /betterfood downloadpluginupdate to check for plugin updates.");
-                return true;
-            }
-            if (!sender.hasPermission("betterfood.user")) {
-                sender.sendMessage("[BF] You do not have permission to change BetterFood settings.");
-                return true;
-            }
-            toggleBetterFoodEnabled(player);
+            Player p = requireUserPlayer(sender, "[BF] Use /betterfood downloadpluginupdate to check for plugin updates.");
+            if (p != null) toggleBetterFoodEnabled(p);
             return true;
         }
 
         if (args.length == 1) {
-            switch (args[0].toLowerCase()) {
+            switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "downloadall", "downloadpluginupdate" -> downloadPluginUpdate(sender);
                 case "downloadallcontent" -> noContentPacks(sender);
                 case "setup" -> openSetup(sender);
                 case "recommendedplugins" -> recommendedPlugins(sender);
                 case "toggleeating" -> {
-                    if (!(sender instanceof Player player)) {
-                        sender.sendMessage("[BF] BetterFood settings can only be changed in-game.");
-                        return true;
-                    }
-                    if (!sender.hasPermission("betterfood.user")) {
-                        sender.sendMessage("[BF] You do not have permission to change BetterFood settings.");
-                        return true;
-                    }
-                    toggleBetterFoodEnabled(player);
+                    Player p = requireUserPlayer(sender, "[BF] BetterFood settings can only be changed in-game.");
+                    if (p != null) toggleBetterFoodEnabled(p);
                 }
                 case "togglemessage" -> {
-                    if (!(sender instanceof Player player)) {
-                        sender.sendMessage("[BF] BetterFood settings can only be changed in-game.");
-                        return true;
-                    }
-                    if (!sender.hasPermission("betterfood.user")) {
-                        sender.sendMessage("[BF] You do not have permission to change BetterFood settings.");
-                        return true;
-                    }
-                    toggleBetterFoodMessage(player);
+                    Player p = requireUserPlayer(sender, "[BF] BetterFood settings can only be changed in-game.");
+                    if (p != null) toggleBetterFoodMessage(p);
                 }
-                default -> sender.sendMessage("[BF] Invalid command. Use /betterfood setup, /betterfood recommendedplugins, /betterfood toggleEating, /betterfood toggleMessage, or /betterfood downloadpluginupdate.");
+                default -> sendUsage(sender);
             }
+            return true;
         }
 
+        sendUsage(sender);
         return true;
     }
 
@@ -76,70 +59,90 @@ public class BetterFoodCommand implements TabExecutor {
     public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, String[] args) {
 
         if (args.length == 1) {
-            return List.of(
-                    "toggleEating",
-                    "toggleMessage",
-                    "downloadpluginupdate",
-                    "downloadall",
-                    "downloadallcontent",
-                    "setup",
-                    "recommendedplugins"
-            );
+            List<String> completions = new ArrayList<>();
+            if (sender.hasPermission("betterfood.user")) {
+                completions.add("toggleEating");
+                completions.add("toggleMessage");
+            }
+            if (sender.hasPermission("betterfood.admin")) {
+                completions.add("downloadpluginupdate");
+                completions.add("downloadallcontent");
+                completions.add("setup");
+                completions.add("recommendedplugins");
+            }
+
+            String prefix = args[0].toLowerCase(Locale.ROOT);
+            return completions.stream()
+                    .filter(completion -> completion.toLowerCase(Locale.ROOT).startsWith(prefix))
+                    .toList();
         }
 
         return List.of();
     }
 
-    private void toggleBetterFoodEnabled(Player player) {
-
-        NamespacedKey betterFoodEnabledKey = plugin.getKeyDisabled();
-        PersistentDataContainer playerData = player.getPersistentDataContainer();
-
-        if (playerData.has(betterFoodEnabledKey, PersistentDataType.BYTE)) {
-            playerData.remove(betterFoodEnabledKey);
-            player.sendMessage("[BF] Automatic Eating: ON");
-        } else {
-            playerData.set(betterFoodEnabledKey, PersistentDataType.BYTE, (byte)0);
-            player.sendMessage("[BF] Automatic Eating: OFF");
+    private void sendUsage(CommandSender sender) {
+        if (sender.hasPermission("betterfood.admin")) {
+            sender.sendMessage("[BF] Invalid command. Use /betterfood setup, /betterfood recommendedplugins, /betterfood toggleEating, /betterfood toggleMessage, or /betterfood downloadpluginupdate.");
+            return;
         }
+        sender.sendMessage("[BF] Invalid command. Use /betterfood toggleEating or /betterfood toggleMessage.");
+    }
 
+    private Player requireUserPlayer(CommandSender sender, String consoleMessage) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(consoleMessage);
+            return null;
+        }
+        if (!sender.hasPermission("betterfood.user")) {
+            sender.sendMessage("[BF] You do not have permission to change BetterFood settings.");
+            return null;
+        }
+        return player;
+    }
+
+    private void toggleBetterFoodEnabled(Player player) {
+        toggleFlag(player, plugin.getKeyDisabled(), "[BF] Automatic Eating: ON", "[BF] Automatic Eating: OFF");
     }
 
     private void toggleBetterFoodMessage(Player player) {
+        toggleFlag(player, plugin.getKeyHideMessage(), "[BF] Now showing food consumption notifications", "[BF] No longer showing food consumption notifications");
+    }
 
-        NamespacedKey betterFoodShowMessageKey = plugin.getKeyHideMessage();
+    //Both flags mark the feature as off when present: removing the flag enables, setting it disables
+    private void toggleFlag(Player player, NamespacedKey key, String enabledMessage, String disabledMessage) {
         PersistentDataContainer playerData = player.getPersistentDataContainer();
 
-        if (playerData.has(betterFoodShowMessageKey, PersistentDataType.BYTE)) {
-            playerData.remove(betterFoodShowMessageKey);
-            player.sendMessage("[BF] Now showing food consumption notifications");
+        if (playerData.has(key, PersistentDataType.BYTE)) {
+            playerData.remove(key);
+            player.sendMessage(enabledMessage);
         } else {
-            playerData.set(betterFoodShowMessageKey, PersistentDataType.BYTE, (byte)0);
-            player.sendMessage("[BF] No longer showing food consumption notifications");
+            playerData.set(key, PersistentDataType.BYTE, (byte)0);
+            player.sendMessage(disabledMessage);
         }
     }
 
+    private boolean denyNonAdmin(CommandSender sender, String message) {
+        if (sender.hasPermission("betterfood.admin"))
+            return false;
+        sender.sendMessage(message);
+        return true;
+    }
+
     private void downloadPluginUpdate(CommandSender sender) {
-        if (!sender.hasPermission("betterfood.admin")) {
-            sender.sendMessage("[BF] You do not have permission to update the BetterFood plugin.");
+        if (denyNonAdmin(sender, "[BF] You do not have permission to update the BetterFood plugin."))
             return;
-        }
         NightbreakPluginUpdater.downloadPluginUpdateAsync(plugin, BetterFood.NIGHTBREAK_PLUGIN_SPEC, sender, null);
     }
 
     private void noContentPacks(CommandSender sender) {
-        if (!sender.hasPermission("betterfood.admin")) {
-            sender.sendMessage("[BF] You do not have permission to update BetterFood.");
+        if (denyNonAdmin(sender, "[BF] You do not have permission to manage BetterFood content."))
             return;
-        }
         sender.sendMessage("[BF] BetterFood does not have content packs. Use /betterfood setup for plugin updates and settings.");
     }
 
     private void openSetup(CommandSender sender) {
-        if (!sender.hasPermission("betterfood.admin")) {
-            sender.sendMessage("[BF] You do not have permission to open BetterFood setup.");
+        if (denyNonAdmin(sender, "[BF] You do not have permission to open BetterFood setup."))
             return;
-        }
         if (!(sender instanceof Player player)) {
             sender.sendMessage("[BF] BetterFood setup can only be opened in-game.");
             return;
@@ -148,10 +151,8 @@ public class BetterFoodCommand implements TabExecutor {
     }
 
     private void recommendedPlugins(CommandSender sender) {
-        if (!sender.hasPermission("betterfood.admin")) {
-            sender.sendMessage("[BF] You do not have permission to view BetterFood recommendations.");
+        if (denyNonAdmin(sender, "[BF] You do not have permission to view BetterFood recommendations."))
             return;
-        }
         if (sender instanceof Player player) {
             NightbreakCatalogMenu.openRecommendations(plugin, player, BetterFood.NIGHTBREAK_PLUGIN_SPEC);
             return;

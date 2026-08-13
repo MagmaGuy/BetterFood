@@ -1,5 +1,5 @@
 name: BetterFood
-version: 1.4.4
+version: '@Version@'
 authors:
   - MagmaGuy
   - borkmaster12
@@ -10,7 +10,7 @@ permissions:
     description: Makes players automatically eat crafted / cooked food that is in their inventories when sufficiently hungry
     default: true
   betterfood.admin:
-    description: Allows admins to download BetterFood plugin updates
+    description: Allows admins to manage BetterFood (updates, setup, recommendations)
     default: op
 commands:
   betterfood:
