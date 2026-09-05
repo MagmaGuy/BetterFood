@@ -14,6 +14,11 @@ import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
 import org.mockbukkit.mockbukkit.plugin.PluginMock;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.BaseComponent;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -21,16 +26,16 @@ class FoodConsumptionTest {
     private static final NamespacedKey DISABLED = new NamespacedKey("betterfood", "enabled");
     private static final NamespacedKey HIDE_MESSAGE = new NamespacedKey("betterfood", "showmessage");
     private ServerMock server;
-    private PlayerMock player;
+    private FeedbackPlayer player;
     private PluginMock plugin;
 
     @BeforeEach
     void registerListener() {
         server = MockBukkit.mock();
         plugin = MockBukkit.createMockPlugin();
-        player = server.addPlayer();
+        player = new FeedbackPlayer(server);
+        server.addPlayer(player);
         player.addAttachment(plugin, "betterfood.user", true);
-        player.getPersistentDataContainer().set(HIDE_MESSAGE, PersistentDataType.BYTE, (byte) 1);
         player.setFoodLevel(13);
         player.setSaturation(0F);
         server.getPluginManager().registerEvents(new FoodLevelChangedListener(DISABLED, HIDE_MESSAGE), plugin);
@@ -54,12 +59,20 @@ class FoodConsumptionTest {
         assertEquals(2, player.getInventory().getItem(0).getAmount());
         assertEquals(1, player.getInventory().getItem(1).getAmount());
         assertEquals(new ItemStack(Material.RABBIT_STEW), player.getInventory().getItem(2));
+        assertEquals(List.of(ChatMessageType.ACTION_BAR), player.channels);
+        assertEquals(1, player.messages.size());
+        assertTrue(player.messages.getFirst().contains("COOKED_BEEF"));
     }
 
-    @Test
-    void modifiedFoodIsPreservedWhileTheNextPristineStackIsConsumed() {
+    @ParameterizedTest
+    @ValueSource(strings = {"name", "persistent-data"})
+    void modifiedFoodIsPreservedWhileTheNextPristineStackIsConsumed(String modification) {
         ItemStack modified = new ItemStack(Material.COOKED_BEEF);
-        modified.editMeta(meta -> meta.setDisplayName("Player-owned food"));
+        modified.editMeta(meta -> {
+            if (modification.equals("name")) meta.setDisplayName("Player-owned food");
+            else meta.getPersistentDataContainer().set(new NamespacedKey("test", "owned"),
+                    PersistentDataType.BYTE, (byte) 1);
+        });
         player.getInventory().setItem(0, modified);
         player.getInventory().setItem(1, new ItemStack(Material.COOKED_BEEF, 2));
 
@@ -71,10 +84,12 @@ class FoodConsumptionTest {
     @Test
     void consumingLastStewReturnsItsBowlInTheSameSlot() {
         player.setFoodLevel(15);
+        player.getPersistentDataContainer().set(HIDE_MESSAGE, PersistentDataType.BYTE, (byte) 1);
         player.getInventory().setItem(3, new ItemStack(Material.MUSHROOM_STEW));
 
         assertEquals(20, dispatch(14, false).getFoodLevel());
         assertEquals(new ItemStack(Material.BOWL), player.getInventory().getItem(3));
+        assertTrue(player.messages.isEmpty(), "Hiding feedback must not disable consumption");
     }
 
     @ParameterizedTest
@@ -92,6 +107,26 @@ class FoodConsumptionTest {
         assertEquals(requested, event.getFoodLevel());
         assertEquals(food, player.getInventory().getItem(0));
         assertEquals(0F, player.getSaturation());
+        assertTrue(player.messages.isEmpty(), "Rejected consumption must not emit feedback");
+    }
+
+    // MockBukkit's Spigot bridge discards ChatMessageType. Record the real
+    // listener's call at that Bukkit interface, without replacing food logic.
+    private static final class FeedbackPlayer extends PlayerMock {
+        private final List<ChatMessageType> channels = new ArrayList<>();
+        private final List<String> messages = new ArrayList<>();
+        private final org.bukkit.entity.Player.Spigot feedback = new org.bukkit.entity.Player.Spigot() {
+            @Override
+            public void sendMessage(ChatMessageType position, BaseComponent... components) {
+                channels.add(position);
+                messages.add(BaseComponent.toPlainText(components));
+            }
+        };
+
+        private FeedbackPlayer(ServerMock server) { super(server, "FoodTester"); }
+
+        @Override
+        public org.bukkit.entity.Player.Spigot spigot() { return feedback; }
     }
 
     private FoodLevelChangeEvent dispatch(int foodLevel, boolean cancelled) {
