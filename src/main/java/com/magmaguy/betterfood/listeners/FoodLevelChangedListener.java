@@ -63,8 +63,12 @@ public class FoodLevelChangedListener implements Listener {
     private final NamespacedKey keyBetterFoodDisabled;
     private final NamespacedKey keyBetterFoodHideMessage;
     public FoodLevelChangedListener(BetterFood plugin) {
-        this.keyBetterFoodDisabled = plugin.getKeyDisabled();
-        this.keyBetterFoodHideMessage = plugin.getKeyHideMessage();
+        this(plugin.getKeyDisabled(), plugin.getKeyHideMessage());
+    }
+
+    FoodLevelChangedListener(NamespacedKey disabled, NamespacedKey hideMessage) {
+        this.keyBetterFoodDisabled = disabled;
+        this.keyBetterFoodHideMessage = hideMessage;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
