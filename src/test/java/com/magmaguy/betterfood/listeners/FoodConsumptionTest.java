@@ -1,5 +1,7 @@
 package com.magmaguy.betterfood.listeners;
 
+import com.magmaguy.betterfood.BetterFood;
+import com.magmaguy.betterfood.commands.BetterFoodCommand;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.event.entity.FoodLevelChangeEvent;
@@ -13,12 +15,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockbukkit.mockbukkit.MockBukkit;
 import org.mockbukkit.mockbukkit.ServerMock;
 import org.mockbukkit.mockbukkit.entity.PlayerMock;
-import org.mockbukkit.mockbukkit.plugin.PluginMock;
 import net.md_5.bungee.api.ChatMessageType;
 import net.md_5.bungee.api.chat.BaseComponent;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.io.File;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -27,18 +29,19 @@ class FoodConsumptionTest {
     private static final NamespacedKey HIDE_MESSAGE = new NamespacedKey("betterfood", "showmessage");
     private ServerMock server;
     private FeedbackPlayer player;
-    private PluginMock plugin;
+    private BetterFood plugin;
 
     @BeforeEach
     void registerListener() {
         server = MockBukkit.mock();
-        plugin = MockBukkit.createMockPlugin();
+        plugin = MockBukkit.loadWith(FixturePlugin.class, new File("src/main/resources/plugin.yml"));
         player = new FeedbackPlayer(server);
         server.addPlayer(player);
         player.addAttachment(plugin, "betterfood.user", true);
         player.setFoodLevel(13);
         player.setSaturation(0F);
-        server.getPluginManager().registerEvents(new FoodLevelChangedListener(DISABLED, HIDE_MESSAGE), plugin);
+        server.getPluginManager().registerEvents(new FoodLevelChangedListener(plugin), plugin);
+        plugin.getCommand("betterfood").setExecutor(new BetterFoodCommand(plugin));
     }
 
     @AfterEach
@@ -84,12 +87,14 @@ class FoodConsumptionTest {
     @Test
     void consumingLastStewReturnsItsBowlInTheSameSlot() {
         player.setFoodLevel(15);
-        player.getPersistentDataContainer().set(HIDE_MESSAGE, PersistentDataType.BYTE, (byte) 1);
+        assertTrue(server.dispatchCommand(player, "betterfood togglemessage"));
         player.getInventory().setItem(3, new ItemStack(Material.MUSHROOM_STEW));
 
         assertEquals(20, dispatch(14, false).getFoodLevel());
         assertEquals(new ItemStack(Material.BOWL), player.getInventory().getItem(3));
         assertTrue(player.messages.isEmpty(), "Hiding feedback must not disable consumption");
+        assertTrue(server.dispatchCommand(player, "betterfood togglemessage"));
+        assertFalse(player.getPersistentDataContainer().has(HIDE_MESSAGE, PersistentDataType.BYTE));
     }
 
     @ParameterizedTest
@@ -97,9 +102,14 @@ class FoodConsumptionTest {
     void ineligibleEventsLeaveInventoryAndSaturationUnchanged(String reason) {
         ItemStack food = new ItemStack(reason.equals("excluded-food") ? Material.ROTTEN_FLESH : Material.COOKED_BEEF, 2);
         player.getInventory().setItem(0, food.clone());
-        if (reason.equals("permission")) player.addAttachment(plugin, "betterfood.user", false);
-        if (reason.equals("opt-out")) player.getPersistentDataContainer()
-                .set(DISABLED, PersistentDataType.BYTE, (byte) 1);
+        if (reason.equals("permission")) {
+            player.addAttachment(plugin, "betterfood.user", false);
+            assertTrue(server.dispatchCommand(player, "betterfood toggleeating"));
+            assertTrue(server.dispatchCommand(player, "betterfood togglemessage"));
+            assertFalse(player.getPersistentDataContainer().has(DISABLED, PersistentDataType.BYTE));
+            assertFalse(player.getPersistentDataContainer().has(HIDE_MESSAGE, PersistentDataType.BYTE));
+        }
+        if (reason.equals("opt-out")) assertTrue(server.dispatchCommand(player, "betterfood"));
         int requested = reason.equals("increasing") ? 14 : 12;
 
         FoodLevelChangeEvent event = dispatch(requested, reason.equals("cancelled"));
@@ -108,6 +118,20 @@ class FoodConsumptionTest {
         assertEquals(food, player.getInventory().getItem(0));
         assertEquals(0F, player.getSaturation());
         assertTrue(player.messages.isEmpty(), "Rejected consumption must not emit feedback");
+        if (reason.equals("opt-out")) {
+            assertTrue(server.dispatchCommand(player, "betterfood toggleeating"));
+            assertFalse(player.getPersistentDataContainer().has(DISABLED, PersistentDataType.BYTE));
+            assertEquals(20, dispatch(12, false).getFoodLevel());
+            assertEquals(1, player.getInventory().getItem(0).getAmount());
+        }
+    }
+
+    // Load the real descriptor and settings keys without shared updater/metrics startup.
+    // Command and hunger behavior below still use the production implementations.
+    public static class FixturePlugin extends BetterFood {
+        @Override public void onLoad() { }
+        @Override public void onEnable() { }
+        @Override public void onDisable() { }
     }
 
     // MockBukkit's Spigot bridge discards ChatMessageType. Record the real
