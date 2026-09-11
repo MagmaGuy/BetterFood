@@ -145,7 +145,6 @@ publishing {
 
     publications {
         mavenJava(MavenPublication) {
-            artifact(tasks.named('shadowJar')) { classifier = null }
             from components.java
         }
     }
