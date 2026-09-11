@@ -3,11 +3,12 @@ import org.apache.tools.ant.filters.ReplaceTokens
 plugins {
     id 'java-library'
     id 'idea'
+    id 'maven-publish'
     id "com.gradleup.shadow" version "8.3.5"
 }
 
 group = "com.magmaguy"
-version = "1.5.0"
+version = "1.5.1"
 description = "BetterFood"
 
 repositories {
@@ -126,5 +127,25 @@ ext {
 }
 
 processResources {
+    inputs.properties(resourceTokens)
     filter ReplaceTokens, tokens: resourceTokens
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "magmaguy"
+            url = "https://repo.magmaguy.com/releases"
+            credentials {
+                username = project.findProperty('magmaguyUsername') ?: System.getenv('MAGMAGUY_USERNAME') ?: ''
+                password = project.findProperty('magmaguyPassword') ?: System.getenv('MAGMAGUY_PASSWORD') ?: ''
+            }
+        }
+    }
+
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
 }
