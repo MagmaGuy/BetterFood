@@ -51,6 +51,8 @@ On Unix, use `./gradlew shadowJar`. The deployable file is `build/libs/BetterFoo
 
 ## Developer API
 
+[Java class and method reference](https://wiki.nightbreak.io/javadoc/betterfood/index.html).
+
 Integration scope and supported behavior: [BetterFood developer reference](https://wiki.nightbreak.io/developers#betterfood). See the [Java API index](https://wiki.nightbreak.io/developers) for dependency setup and lifecycle guidance.
 
-Maven: `com.magmaguy:BetterFood:1.5.1` from [MagmaGuy's repository](https://repo.magmaguy.com/releases). Use `provided` or `compileOnly` scope for the installed plugin.
+Maven: `com.magmaguy:BetterFood:1.5.1` from [MagmaGuy's repository](https://repo.magmaguy.com/#/releases). Use `provided` or `compileOnly` scope for the installed plugin.
