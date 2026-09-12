@@ -39,7 +39,7 @@ If food is not consumed, check the player's permission and toggle, the food type
 
 For support, include the server and plugin versions, the food type, whether it is an ordinary unmodified stack, and the steps that reproduce the problem.
 
-## Building and integration
+## Building from source
 
 Use JDK 21 and the included Gradle wrapper:
 
@@ -49,4 +49,8 @@ Use JDK 21 and the included Gradle wrapper:
 
 On Unix, use `./gradlew shadowJar`. The deployable file is `build/libs/BetterFood.jar`. `MC_DIST_DIR` optionally selects a shared output directory. Publish a changed MagmaCore dependency to Maven Local before rebuilding.
 
-This checkout's release is `1.5.1`. The coordinate `com.magmaguy:BetterFood:1.5.1` is available from [MagmaGuy's Maven repository](https://repo.magmaguy.com/releases).
+## Developer API
+
+Integration scope and supported behavior: [BetterFood developer reference](https://wiki.nightbreak.io/developers#betterfood). See the [Java API index](https://wiki.nightbreak.io/developers) for dependency setup and lifecycle guidance.
+
+Maven: `com.magmaguy:BetterFood:1.5.1` from [MagmaGuy's repository](https://repo.magmaguy.com/releases). Use `provided` or `compileOnly` scope for the installed plugin.
