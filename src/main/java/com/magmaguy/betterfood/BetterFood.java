@@ -41,7 +41,7 @@ public class BetterFood extends JavaPlugin {
     @Override
     public void onEnable() {
         MagmaCore.onEnable(this);
-        new Metrics(this, 4557);
+        metrics = new Metrics(this, 4557);
         Food.logCoverageAudit(getLogger());
         this.getServer().getPluginManager().registerEvents(new FoodLevelChangedListener(this), this);
         PluginCommand betterFoodCommand = this.getCommand("betterfood");
@@ -55,8 +55,16 @@ public class BetterFood extends JavaPlugin {
         NightbreakPluginUpdater.autoDownloadPluginUpdateIfEnabled(this, NIGHTBREAK_PLUGIN_SPEC);
     }
 
+    private volatile Metrics metrics;
+
     @Override
     public void onDisable() {
+        // bStats runs its own scheduler thread; without this every reload leaves one
+        // reporting for, and holding on to, the previous instance.
+        if (metrics != null) {
+            metrics.shutdown();
+            metrics = null;
+        }
         MagmaCore.shutdown(this);
     }
 

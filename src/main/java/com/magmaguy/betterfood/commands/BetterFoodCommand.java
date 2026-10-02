@@ -2,6 +2,7 @@ package com.magmaguy.betterfood.commands;
 
 import com.magmaguy.betterfood.BetterFood;
 import com.magmaguy.magmacore.nightbreak.NightbreakCatalogMenu;
+import com.magmaguy.magmacore.nightbreak.NightbreakPluginHotSwap;
 import com.magmaguy.magmacore.nightbreak.NightbreakSetupControls;
 import com.magmaguy.magmacore.nightbreak.NightbreakPluginUpdater;
 import org.bukkit.NamespacedKey;
@@ -35,6 +36,7 @@ public class BetterFoodCommand implements TabExecutor {
         if (args.length == 1) {
             switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "downloadall", "downloadpluginupdate" -> downloadPluginUpdate(sender);
+                case "applypluginupdate" -> applyPluginUpdate(sender);
                 case "downloadallcontent" -> noContentPacks(sender);
                 case "setup" -> openSetup(sender);
                 case "recommendedplugins" -> recommendedPlugins(sender);
@@ -66,6 +68,7 @@ public class BetterFoodCommand implements TabExecutor {
             }
             if (sender.hasPermission("betterfood.admin")) {
                 completions.add("downloadpluginupdate");
+                completions.add("applypluginupdate");
                 completions.add("downloadallcontent");
                 completions.add("setup");
                 completions.add("recommendedplugins");
@@ -82,7 +85,7 @@ public class BetterFoodCommand implements TabExecutor {
 
     private void sendUsage(CommandSender sender) {
         if (sender.hasPermission("betterfood.admin")) {
-            sender.sendMessage("[BF] Invalid command. Use /betterfood setup, /betterfood recommendedplugins, /betterfood toggleEating, /betterfood toggleMessage, or /betterfood downloadpluginupdate.");
+            sender.sendMessage("[BF] Invalid command. Use /betterfood setup, /betterfood recommendedplugins, /betterfood toggleEating, /betterfood toggleMessage, /betterfood downloadpluginupdate, or /betterfood applypluginupdate.");
             return;
         }
         sender.sendMessage("[BF] Invalid command. Use /betterfood toggleEating or /betterfood toggleMessage.");
@@ -132,6 +135,12 @@ public class BetterFoodCommand implements TabExecutor {
         if (denyNonAdmin(sender, "[BF] You do not have permission to update the BetterFood plugin."))
             return;
         NightbreakPluginUpdater.downloadPluginUpdateAsync(plugin, BetterFood.NIGHTBREAK_PLUGIN_SPEC, sender, null);
+    }
+
+    private void applyPluginUpdate(CommandSender sender) {
+        if (denyNonAdmin(sender, "[BF] You do not have permission to update the BetterFood plugin."))
+            return;
+        NightbreakPluginHotSwap.applyStagedUpdate(plugin, sender);
     }
 
     private void noContentPacks(CommandSender sender) {
